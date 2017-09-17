@@ -25,7 +25,9 @@ class VsSocket {
   }
 
   initStore(url) {
-    this.store = new StoreClient(url)
+    if (url) {
+      this.store = new StoreClient(url)
+    }
   }
 
   initPubsub(url) {
@@ -247,13 +249,13 @@ class VsSocket {
     const mRecipient = m.r
     const mData = m.d
 
-    if (!mRecipient || !mData) {
-      return
+    if (mRecipient && mData) {
+      if (Array.isArray(mRecipient)) {
+        this.relayMulti(mData, mRecipient)
+      } else {
+        this.relaySingle(mData, mRecipient)
+      }
     }
-
-    return Array.isArray(mRecipient)
-      ? this.relayMulti(mData, mRecipient)
-      : this.relaySingle(mData, mRecipient)
   }
 
   /**
