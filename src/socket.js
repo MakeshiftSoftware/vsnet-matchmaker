@@ -7,6 +7,11 @@ const StoreClient = require('./store')
 const PubSubClient = require('./pubsub')
 
 class VsSocket {
+  /**
+   * Initialize socket server.
+   *
+   * @param {Object} opts - Server options
+   */
   constructor(opts) {
     this.users = {}
     this.handlers = {}
@@ -24,12 +29,22 @@ class VsSocket {
     this.wss.on('connection', this.onClientConnected.bind(this))
   }
 
+  /**
+   * Initialize store connection.
+   *
+   * @param {String} url - Store connection url
+   */
   initStore(url) {
     if (url) {
       this.store = new StoreClient(url)
     }
   }
 
+  /**
+   * Initialize pubsub connection.
+   *
+   * @param {String} url - Pubsub connection url
+   */
   initPubsub(url) {
     this.pubsub = new PubSubClient(url)
     this.pubsub.subscribe('global')
@@ -37,12 +52,11 @@ class VsSocket {
   }
 
   /**
-   * Start server
+   * Start server.
    *
    * @param {Function} cb - Callback function
    */
   start(cb) {
-    // Start heartbeat interval
     setInterval(this.ping.bind(this), this.pingInterval)
 
     if (process.send) {
@@ -55,7 +69,7 @@ class VsSocket {
   }
 
   /**
-   * Stop server
+   * Stop server.
    *
    * @param {Function} cb - Callback function
    */
@@ -74,7 +88,7 @@ class VsSocket {
   }
 
   /**
-   * Authenticate connection request using jwt
+   * Authenticate connection request using jwt.
    *
    * @param {Object} info - Request data
    * @param {Function} cb - Callback function
@@ -97,9 +111,9 @@ class VsSocket {
   }
 
   /**
-   * Client connected handler
+   * Client connected handler.
    *
-   * @param {Object} socket - The socket object of new client
+   * @param {Object} socket - Socket object
    */
   onClientConnected(socket) {
     const user = socket.upgradeReq.user
@@ -125,28 +139,32 @@ class VsSocket {
   }
 
   /**
-   * Client disconnected handler
-   * TODO: more cleanup, notify other player?
+   * Client disconnected handler.
    *
-   * @param {Object} socket - The disconnected socket
+   * @param {Object} socket - Socket object
    */
   onClientDisconnected(socket) {
     console.log('Client %s disconnected', socket.playerId)
-    const playerId = socket.playerId
-    delete this.users[playerId]
+    delete this.users[socket.playerId]
 
     if (this.handlers.disconnected) {
       this.handlers.disconnected(socket)
     }
   }
 
+  /**
+   * Register callback function for an event.
+   *
+   * @param {String} event - Event name
+   * @param {Function} callback - Callback function
+   */
   on(event, callback) {
     this.handlers[event] = callback
   }
 
   /**
-   * Ping clients to check if they are alive and clean up severed connections
-   * TODO: more cleanup, handle disconnections
+   * Ping sockets to check if they are alive.
+   * TODO: attach custom handler for cleanup
    */
   ping() {
     this.wss.clients.forEach((socket) => {
@@ -160,22 +178,33 @@ class VsSocket {
     })
   }
 
+  /**
+   * Indicates that socket is still alive
+   */
   pong(socket) {
-    socket.on('pong', this.heartbeat)
+    socket.on('pong', () => {
+      this.isAlive = true
+    })
   }
 
-  heartbeat() {
-    this.isAlive = true
-  }
-
+  /**
+   * Attach message handler for when socket sends message.
+   *
+   * @param {Object} socket - Socket object
+   */
   attachMessageHandler(socket) {
     const server = this
 
     socket.on('message', (message) => {
-      server.onMessage.bind(server)(message, socket)
+      server.onMessage(message, socket)
     })
   }
 
+  /**
+   * Attach close handler for when sockets are disconnected.
+   *
+   * @param {Object} socket - Socket object
+   */
   attachCloseHandler(socket) {
     const server = this
 
@@ -184,14 +213,21 @@ class VsSocket {
     })
   }
 
+  /**
+   * Associate player id with socket object
+   *
+   * @param {String} playerId - Player id
+   * @param {Object} socket - Socket object
+   */
   registerPlayer(playerId, socket) {
     this.users[playerId] = socket
   }
 
   /**
-   * Message received handler
+   * Message received handler.
    *
-   * @param {String} message - The message received from client
+   * @param {String} message - Message json
+   * @param {Object} socket - Socket object
    */
   onMessage(message, socket) {
     console.log('Received message from client:', message)
@@ -211,16 +247,16 @@ class VsSocket {
   }
 
   /**
-   * Publish message to other servers
+   * Publish message
    *
-   * @param {Object} m - The message object
+   * @param {Object} m - Message object
    */
   relayMessage(m) {
     this.pubsub.publish('global', JSON.stringify(m))
   }
 
   /**
-   * Send message to socket
+   * Send message to player.
    *
    * @param {Object} m - The message object
    * @param {Object} socket - The socket object
@@ -230,14 +266,13 @@ class VsSocket {
   }
 
   /**
-   * Pubsub message handler. Parse incoming message
-   * and relay it to intended recipients
+   * Pubsub message handler.
+   * Parse incoming message and relay it to recipient.
    *
-   * @param {String} channel - The sub channel
-   * @param {String} message - The message metadata
+   * @param {String} channel - Channel name
+   * @param {String} message - Message metadata
    */
   pubsubOnMessage(channel, message) {
-    console.log('Received pubsub message:', message)
     let m
 
     try {
@@ -259,26 +294,24 @@ class VsSocket {
   }
 
   /**
-   * Send a message to a single user by user id
+   * Send message to a single user by player id.
    *
-   * @param {Object} mData - The message data
-   * @param {String} id - The user id of recipient
+   * @param {Object} mData - Message data
+   * @param {String} id - Player id
    */
   relaySingle(mData, id) {
-    console.log('Retrieving socket for player:', id)
     const socket = this.getSocket(id)
 
     if (socket) {
-      console.log('Socket found, sending message to player')
       this.sendMessage(mData, socket)
     }
   }
 
   /**
-   * Send a message to multiple users using an array of user ids
+   * Send message to multiple users using an array of player ids.
    *
-   * @param {Object} message - The message data
-   * @param {Array} ids - The array of recipient user ids
+   * @param {Object} mData - Message data
+   * @param {Array} ids - Array of player ids
    */
   relayMulti(mData, ids) {
     ids.forEach((id) => {
@@ -291,7 +324,7 @@ class VsSocket {
   }
 
   /**
-   * Get player's socket object by player id
+   * Get socket object by player id.
    *
    * @param {String} id - Player id
    */
