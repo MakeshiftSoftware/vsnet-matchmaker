@@ -1,0 +1,30 @@
+{
+  "name": "vsnet-game",
+  "version": "1.0.0",
+  "engines": {
+    "node": ">=6.0.0"
+  },
+  "scripts": {
+    "dev": "pm2-docker start --auto-exit ecosystem.config.js",
+    "prod": "pm2-docker start --auto-exit ecosystem.config.js --env production",
+    "clean": "rm -rf node_modules && npm cache verify && npm i",
+    "lint": "./node_modules/.bin/eslint src/**",
+    "nsp": "nsp check --output summary",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "co": "^4.6.0",
+    "ioredis": "^3.1.4",
+    "jsonwebtoken": "^7.4.3",
+    "query-string": "^5.0.0",
+    "uuid": "^3.1.0",
+    "uws": "^8.14.1"
+  },
+  "devDependencies": {
+    "eslint": "^4.7.0",
+    "eslint-config-airbnb-base": "^12.0.0",
+    "eslint-plugin-import": "^2.7.0",
+    "eslint-plugin-node": "^5.1.1"
+  }
+}
+
