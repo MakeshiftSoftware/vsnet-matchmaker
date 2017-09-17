@@ -122,7 +122,7 @@ module.exports = (server) => {
   }
 
   const onerror = (err) => {
-    console.log(err)
+    console.log(err.message)
   }
 
   // Attach message handlers
