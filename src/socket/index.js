@@ -320,6 +320,24 @@ class VsSocket {
   defineCommand(name, script) {
     this.store.defineCommand(name, script);
   }
+
+  /**
+   * Define additional actions on client connected event
+   *
+   * @param {Function} cb - Callback function
+   */
+  onConnect(cb) {
+    this.handlers.connected = cb;
+  }
+
+  /**
+   * Define additional actions on client disconnected event
+   *
+   * @param {Function} cb - Callback function
+   */
+  onDisconnect(cb) {
+    this.handlers.disconnected = cb;
+  }
 }
 
 module.exports = VsSocket;

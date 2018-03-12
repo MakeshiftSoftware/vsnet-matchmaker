@@ -7,8 +7,9 @@ const MAX_RATING = 30;
 
 const Protocol = {
   CONNECTED: 0,
-  GAME_FOUND: 1,
-  GAME_NOT_FOUND: 2
+  FIND_GAME: 1,
+  GAME_FOUND: 2,
+  GAME_NOT_FOUND: 3
 };
 
 module.exports = (server) => {
@@ -109,8 +110,7 @@ module.exports = (server) => {
 
   const script = fs.readFileSync(path.resolve(__dirname, '../scripts/matchmaker.lua'));
   server.defineCommand('match', script);
-
-  server.on('connected', onClientConnected);
-  server.on('disconnected', onClientDisconnected);
-  server.on('find_game', findGame);
+  server.onConnect(onClientConnected);
+  server.onDisconnect(onClientDisconnected);
+  server.on(Protocol.FIND_GAME, findGame);
 };
