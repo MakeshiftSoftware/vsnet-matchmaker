@@ -8,24 +8,12 @@ const Redpub = require('./redpub');
 
 function noop() {}
 
-const defaults = {
-  pingInterval: 30000
-};
-
-const Event = {
-  CONNECTION: 'connection',
-  CLOSE: 'close',
-  MESSAGE: 'message',
-  PONG: 'pong'
-};
-
-const MessageProp = {
-  TYPE: 't',
-  DATA: 'd',
-  RECIPIENT: 'r'
-};
-
-const PUBSUB_CHANNEL = 'global';
+const DEFAULT_PORT = 8000;
+const DEFAULT_PING_INTERVAL = 30000;
+const DEFAULT_STORE_URL = null;
+const DEFAULT_PUBSUB_URL = null;
+const DEFAULT_SECRET = null;
+const DEFAULT_CHANNEL = 'global';
 
 class VsSocket {
   /**
@@ -34,9 +22,16 @@ class VsSocket {
    * @param {Object} options - Server options
    */
   constructor(options) {
+    this.options = options;
+    options.port = options.port || DEFAULT_PORT;
+    options.pingInterval = options.pingInterval || DEFAULT_PING_INTERVAL;
+    options.channel = options.channel || DEFAULT_CHANNEL;
+    options.pubsub = process.env.REDIS_PUBSUB_URL || DEFAULT_PUBSUB_URL;
+    options.store = process.env.REDIS_STORE_URL || DEFAULT_STORE_URL;
+    options.secret = process.env.APP_SECRET || DEFAULT_SECRET;
+
     this.users = {};
     this.handlers = {};
-    this.options = Object.assign({}, defaults, options);
 
     if (this.options.store) {
       this.initStore(this.options.store);
@@ -47,11 +42,11 @@ class VsSocket {
     }
 
     this.wss = new WebSocket.Server({
-      port: this.options.port,
+      port: options.port,
       verifyClient: this.verifyClient(this.options.secret)
     });
 
-    this.wss.on(Event.CONNECTION, this.onClientConnected.bind(this));
+    this.wss.on('connection', this.onClientConnected.bind(this));
   }
 
   /**
@@ -70,8 +65,9 @@ class VsSocket {
    */
   initPubsub(url) {
     this.pubsub = new Redpub(url);
-    this.pubsub.subscribe(PUBSUB_CHANNEL);
-    this.pubsub.on(Event.MESSAGE, function(channel, message) {
+    this.pubsub.subscribe(this.options.channel);
+
+    this.pubsub.on('message', function(channel, message) {
       const m = this.parseMessage(message);
 
       if (m && m.data && m.recipient) {
@@ -158,20 +154,20 @@ class VsSocket {
     server.users[user.id] = socket;
     socket.isAlive = true;
 
-    socket.on(Event.PONG, function() {
-      socket.isAlive = true;
-    });
-
-    socket.on(Event.MESSAGE, function(message) {
+    socket.on('message', function(message) {
       server.onMessageReceived(message, socket);
     });
 
-    socket.on(Event.CLOSE, function() {
+    socket.on('close', function() {
       server.onClientDisconnected(socket);
     });
 
+    socket.on('pong', function() {
+      socket.isAlive = true;
+    });
+
     if (server.handlers.connected) {
-      server.handlers.connected(null, socket);
+      server.handlers.connected(socket);
     }
 
     console.log('Client %s connected', user.id); // eslint-disable-line
@@ -188,7 +184,7 @@ class VsSocket {
     delete this.users[socket.id];
 
     if (server.handlers.disconnected) {
-      server.handlers.disconnected(null, socket);
+      server.handlers.disconnected(socket);
     }
 
     console.log('Client %s disconnected', socket.id); // eslint-disable-line
@@ -206,7 +202,7 @@ class VsSocket {
 
   /**
    * Ping sockets to check if they are alive.
-   * TODO: attach custom handler for cleanup
+   * TODO: cleanup disconnected sockets
    */
   ping() {
     const server = this;
@@ -249,19 +245,17 @@ class VsSocket {
    * @param {String} message - Socket message
    */
   parseMessage(message) {
-    let m;
-
     try {
-      m = JSON.parse(message);
-    } catch (e) {
-      return;
-    }
+      const m = JSON.parse(message);
 
-    return {
-      type: m[MessageProp.TYPE],
-      data: m[MessageProp.DATA],
-      recipient: m[MessageProp.RECIPIENT]
-    };
+      return {
+        type: m.type,
+        data: m.data,
+        recipient: m.recipient
+      };
+    } catch (e) {
+      console.log(e); // eslint-disable-line
+    }
   }
 
   /**
@@ -270,11 +264,11 @@ class VsSocket {
    * @param {Object} m - Message object
    */
   publishMessage(m) {
-    this.pubsub.publish(PUBSUB_CHANNEL, JSON.stringify(m));
+    this.pubsub.publish(this.options.channel, JSON.stringify(m));
   }
 
   /**
-   * Send message to player.
+   * Send message to user.
    *
    * @param {(String|Object)} message - The message string or object
    * @param {Object} socket - The socket object
@@ -288,10 +282,10 @@ class VsSocket {
   }
 
   /**
-   * Send message to a single user by player id.
+   * Send message to a single user by user id.
    *
    * @param {Object} data - Message data
-   * @param {String} id - Player id
+   * @param {String} id - User id
    */
   relaySingle(data, id) {
     const socket = this.users[id];
@@ -302,10 +296,10 @@ class VsSocket {
   }
 
   /**
-   * Send message to multiple users using an array of player ids.
+   * Send message to multiple users using an array of user ids.
    *
    * @param {Object} mData - Message data
-   * @param {Array} ids - Array of player ids
+   * @param {Array} ids - Array of user ids
    */
   relayMulti(data, ids) {
     ids.forEach((id) => {
@@ -315,6 +309,16 @@ class VsSocket {
         this.sendMessage(data, socket);
       }
     });
+  }
+
+  /**
+   * Define custom redis command
+   *
+   * @param {String} name - Command name
+   * @param {String} script - Lua script text
+   */
+  defineCommand(name, script) {
+    this.store.defineCommand(name, script);
   }
 }
 

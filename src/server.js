@@ -1,15 +1,9 @@
 const VsSocket = require('./socket');
-const config = require('./config');
 
-const server = new VsSocket({
-  port: process.env.PORT,
-  secret: process.env.APP_SECRET,
-  pubsub: config.pubsub[process.env.NODE_ENV],
-  store: config.store[process.env.NODE_ENV]
-});
+const server = new VsSocket();
 
 // Attach event handlers
-require('./matchmaker')(server);
+require('./handlers')(server);
 
 server.start(() => {
   process.on('SIGINT', () => {
