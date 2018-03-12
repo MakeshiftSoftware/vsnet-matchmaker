@@ -1,8 +1,11 @@
 node_modules/
+test/
 *.log
-.git
-.gitattributes
-.env
-.eslintrc
+.dockerignore
 .editorconfig
-.DS_Store
+.eslintrc.js
+.gitattributes
+.gitignore
+docker-compose.dev.yml
+Dockerfile.dev
+yarn.lock

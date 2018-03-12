@@ -1,140 +1,132 @@
-const co = require('co')
-const uuid = require('uuid/v4')
+const fs = require('fs');
+const path = require('path');
+const uuid = require('uuid/v4');
 
-module.exports = (server) => {
-  /**
-   * Find a match for player
-   * TEMP: use a single queue
-   */
-  const findMatch = (m, socket) => {
-    const playerId = socket.playerId
-    const playerRating = m.r
+const MIN_RATING = 1;
+const MAX_RATING = 30;
 
-    if (!isRatingValid(playerRating)) {
-      return
-    }
+const Event = {
+  CLIENT_CONNECTED: 'connected',
+  CLIENT_DISCONNECTED: 'disconnected',
+  FIND_GAME: 'find_game'
+};
 
-    console.log('Finding match for player', playerId)
+const MessageProp = {
+  GAME_ID: 'game_id',
+  PLAYER_RATING: 'player_rating',
+  NUM_ATTEMPTS: 'num_attempts',
+  MESSAGE_TYPE: 'type',
+  MESSAGE_DATA: 'data',
+  MESSAGE_RECIPIENT: 'recipient'
+};
 
-    socket.queuesJoined = new Set()
-    socket.attempts = 0
+const SocketProp = {
+  PLAYER_ID: 'id',
+  NUM_ATTEMPTS: 'attempts'
+};
 
-    co(function* () {
-      const matchId = yield server.store.pop(playerRating)
+const MessageType = {
+  CONNECTION_ESTABLISHED: 'connected_matchmaking',
+  GAME_FOUND: 'game_found',
+  GAME_NOT_FOUND: 'game_not_found'
+};
 
-      if (matchId) {
-        onMatchFound(playerId, matchId, socket)
-      } else {
-        onMatchNotFound(playerRating, playerId, socket)
-      }
-    }).catch(onerror)
-  }
-
-  /**
-   * Reattempt matchmaking if previous attempt fails
-   *
-   * @param {Object} m - The message object
-   * @param {Object} socket - The socket object
-   */
-  const reattemptMatch = (m, socket) => {
-    const playerId = socket.playerId
-    const numQueues = socket.queuesJoined.size - 1
-
-    socket.queuesJoined.forEach((q, i) => {
-      co(function* () {
-        const matchId = yield server.store.pop(q)
-
-        if (matchId) {
-          return onMatchFound(playerId, matchId, socket)
-        }
-
-        if (i === numQueues) {
-          onMatchNotFound()
-        }
-      }).catch(onerror)
-    })
-  }
-
-  /**
-   * Handler for match found
-   * Generate a unique id for the new game and send
-   * a message to both players that includes the game id
-   *
-   * @param {String} playerId - Player id of the original player
-   * @param {String} matchId - Player id of the matched player
-   * @param {Object} socket - Socket object of the original player
-   */
-  const onMatchFound = (playerId, matchId, socket) => {
-    console.log('Match found, starting new game')
-    const gameId = uuid()
-
-    // TODO: remove both matched players from all joined queues
-    // do this as a transaction to avoid weird concurrency issues
-    const message = {
-      t: 'm',
-      g: gameId
-    }
-
-    server.sendMessage(message, socket)
-
-    server.relayMessage({
-      r: matchId,
-      d: message
-    })
-  }
-
-  /**
-   * Handler for no match found
-   * Send message to notify user that no match was found
-   * TODO: determine if other queues should be joined based on socket.attempts
-   *
-   * @param {String} playerRating - Player rating
-   * @param {String} playerId - Player id
-   * @param {Object} socket - Socket object
-   */
-  const onMatchNotFound = (playerRating, playerId, socket) => {
-    console.log('Match not found')
-    socket.queuesJoined.add(playerRating)
-    socket.attempts++
-
-    if (socket.attempts === 1) {
-      console.log('Joining matchmaking queue')
-
-      co(function* () {
-        yield server.store.push(playerRating, playerId)
-        server.sendMessage({ t: 'nm' }, socket)
-      }).catch(onerror)
-    }
-  }
-
-  /**
-   * Verify that player rating is a valid rating
-   *
-   * @param {String} rating - Player rating
-   */
-  const isRatingValid = (rating) => {
-    if (rating === null) {
-      return false
-    }
-
-    const n = Number(rating)
-    return Number.isInteger(n) && (n >= 1 && n <= 30)
-  }
-
-  const onerror = (err) => {
-    console.log(err.message)
-  }
-
-  // Attach message handlers
-  server.on('q', findMatch)
-  server.on('r', reattemptMatch)
-
-  server.on('connected', (socket) => {
-    server.sendMessage({ t: 'cm' }, socket)
-  })
-
-  server.on('disconnected', (socket) => {
-    // TODO: cleanup after disconnect
-  })
+function findGameRequest(m, socket) {
+  return {
+    playerId: socket[SocketProp.PLAYER_ID],
+    playerRating: m[MessageProp.PLAYER_RATING]
+  };
 }
 
+const clientConnectedResponse = {
+  [MessageProp.MESSAGE_TYPE]: MessageType.CONNECTION_ESTABLISHED
+};
+
+function gameFoundResponse(recipient) {
+  const newGameId = uuid();
+
+  const message = {
+    [MessageProp.GAME_ID]: newGameId,
+    [MessageProp.MESSAGE_TYPE]: MessageType.GAME_FOUND
+  };
+
+  return {
+    local: message,
+    broadcast: {
+      [MessageProp.MESSAGE_DATA]: message,
+      [MessageProp.MESSAGE_RECIPIENT]: recipient
+    }
+  };
+}
+
+function gameNotFoundResponse(socket) {
+  return {
+    [MessageProp.MESSAGE_TYPE]: MessageType.GAME_NOT_FOUND,
+    [MessageProp.NUM_ATTEMPTS]: socket[SocketProp.NUM_ATTEMPTS]
+  };
+}
+
+/**
+ * Check if player rating is valid.
+ *
+ * @param {String} rating - Player rating
+ */
+function isRatingValid(rating) {
+  const n = Number(rating);
+  return Number.isInteger(n) && (n >= MIN_RATING && n <= MAX_RATING);
+}
+
+module.exports = (server) => {
+  async function findGame(m, socket) {
+    try {
+      const {
+        playerId,
+        playerRating
+      } = findGameRequest(m, socket);
+
+      if (!isRatingValid(playerRating)) {
+        return;
+      }
+
+      const [match, ignore] = await server.store.match(playerId, playerRating);
+
+      if (ignore) {
+        return;
+      }
+
+      if (match) {
+        onGameFound(match, socket);
+      } else {
+        onGameNotFound(socket);
+      }
+    } catch (err) {
+      console.log(err); // eslint-disable-line
+    }
+  }
+
+  function onGameFound(matchId, socket) {
+    const { local, broadcast } = gameFoundResponse(matchId);
+
+    server.sendMessage(local, socket);
+    server.publishMessage(broadcast);
+
+    delete socket.attempts;
+  }
+
+  function onGameNotFound(socket) {
+    server.sendMessage(gameNotFoundResponse(socket), socket);
+  }
+
+  function onClientConnected(m, socket) {
+    server.sendMessage(clientConnectedResponse, socket);
+  }
+
+  function onClientDisconnected(m, socket) {  // eslint-disable-line
+    // todo
+  }
+
+  server.store.defineCommand('match', fs.readFileSync(path.resolve(__dirname, './scripts/matchmaker.lua')));
+  server.on(Event.CLIENT_CONNECTED, onClientConnected);
+  server.on(Event.CLIENT_DISCONNECTED, onClientDisconnected);
+  server.on(Event.FIND_GAME, findGame);
+};

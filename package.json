@@ -1,30 +1,34 @@
 {
-  "name": "vsnet-game",
+  "name": "vsnet-matchmaker",
+  "description": "vsnet matchmaker",
   "version": "1.0.0",
+  "author": "taapesh",
+  "private": true,
+  "repository": "https://gitlab.com/MakeshiftSoftware/vsnet-matchmaker",
   "engines": {
-    "node": ">=6.0.0"
+    "node": ">=8.0.0"
   },
   "scripts": {
-    "dev": "pm2-docker start --auto-exit ecosystem.config.js",
-    "prod": "pm2-docker start --auto-exit ecosystem.config.js --env production",
-    "clean": "rm -rf node_modules && npm cache verify && npm i",
+    "dev": "pm2-runtime start --watch ecosystem.config.js",
+    "prod": "pm2-runtime start --env production ecosystem.config.js",
     "lint": "./node_modules/.bin/eslint src/**",
+    "clean": "rm -rf node_modules && yarn cache clean && yarn",
     "nsp": "nsp check --output summary",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "co": "^4.6.0",
-    "ioredis": "^3.1.4",
-    "jsonwebtoken": "^7.4.3",
-    "query-string": "^5.0.0",
-    "uuid": "^3.1.0",
-    "uws": "^8.14.1"
+    "ioredis": "^3.2.2",
+    "jsonwebtoken": "^8.2.0",
+    "query-string": "^5.1.0",
+    "uuid": "^3.2.1",
+    "uws": "^9.14.0"
   },
   "devDependencies": {
-    "eslint": "^4.7.0",
+    "chai": "^4.1.2",
+    "eslint": "^4.18.2",
     "eslint-config-airbnb-base": "^12.0.0",
     "eslint-plugin-import": "^2.7.0",
-    "eslint-plugin-node": "^5.1.1"
+    "eslint-plugin-node": "^5.1.1",
+    "mocha": "^5.0.4"
   }
 }
-

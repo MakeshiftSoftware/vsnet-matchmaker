@@ -1,4 +1,4 @@
 node_modules/
+ecosystem.config.json
 *.log
-.env
 .DS_Store

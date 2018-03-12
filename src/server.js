@@ -1,34 +1,26 @@
-const VsSocket = require('./socket')
-const matchmaker = require('./matchmaker')
+const VsSocket = require('./socket');
+const config = require('./config');
 
-const storeUrl = process.env.NODE_ENV === 'production'
-  ? process.env.REDIS_URL_PROD
-  : process.env.REDIS_URL_DEV
-
-const pubsubUrl = process.env.NODE_ENV === 'production'
-  ? process.env.PUBSUB_URL_PROD
-  : process.env.PUBSUB_URL_DEV
-
-// Define server options
-const serverOpts = {
+const server = new VsSocket({
   port: process.env.PORT,
-  secret: process.env.SECRET,
-  pingInterval: 30000,
-  store: storeUrl,
-  pubsub: pubsubUrl
-}
+  secret: process.env.APP_SECRET,
+  pubsub: config.pubsub[process.env.NODE_ENV],
+  store: config.store[process.env.NODE_ENV]
+});
 
-const server = new VsSocket(serverOpts)
-matchmaker(server)
+// Attach event handlers
+require('./matchmaker')(server);
 
-// Start server
 server.start(() => {
-  /* eslint-disable */
   process.on('SIGINT', () => {
-    server.stop(() => {
-      process.exit(0)
-    })
-  })
+    server.stop((err) => {
+      process.exit(err ? 1 : 0);  // eslint-disable-line
+    });
+  });
 
-  console.log('Listening on', process.env.PORT)
-})
+  if (process.send) {
+    process.send('ready');
+  }
+
+  console.log('vsnet-matchmaker: listening on', process.env.PORT); // eslint-disable-line
+});
