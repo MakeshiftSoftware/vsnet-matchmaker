@@ -12,4 +12,4 @@ COPY ecosystem.config.js .
 # Install app dependencies
 RUN yarn install --production
 
-CMD [ "npm", "run", "dev"]
+CMD [ "yarn", "run", "dev"]

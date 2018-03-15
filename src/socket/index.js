@@ -8,11 +8,7 @@ const Redpub = require('./redpub');
 
 function noop() {}
 
-const DEFAULT_PORT = 8000;
 const DEFAULT_PING_INTERVAL = 30000;
-const DEFAULT_STORE_URL = null;
-const DEFAULT_PUBSUB_URL = null;
-const DEFAULT_SECRET = null;
 const DEFAULT_CHANNEL = 'global';
 
 class VsSocket {
@@ -22,28 +18,27 @@ class VsSocket {
    * @param {Object} options - Server options
    */
   constructor(options) {
-    this.options = options;
-    options.port = options.port || DEFAULT_PORT;
-    options.pingInterval = options.pingInterval || DEFAULT_PING_INTERVAL;
-    options.channel = options.channel || DEFAULT_CHANNEL;
-    options.pubsub = process.env.REDIS_PUBSUB_URL || DEFAULT_PUBSUB_URL;
-    options.store = process.env.REDIS_STORE_URL || DEFAULT_STORE_URL;
-    options.secret = process.env.APP_SECRET || DEFAULT_SECRET;
-
+    options = options || {};
+    this.pingInterval = options.pingInterval || DEFAULT_PING_INTERVAL;
+    this.channel = options.channel || DEFAULT_CHANNEL;
+    this.secret = process.env.APP_SECRET;
+    this.pubsubUrl = process.env.REDIS_PUBSUB_URL;
+    this.storeUrl = process.env.REDIS_STORE_URL;
+    this.port = process.env.PORT;
     this.users = {};
     this.handlers = {};
 
-    if (this.options.store) {
-      this.initStore(this.options.store);
+    if (this.storeUrl) {
+      this.initStore(this.storeUrl);
     }
 
-    if (this.options.pubsub) {
-      this.initPubsub(this.options.pubsub);
+    if (this.pubsubUrl) {
+      this.initPubsub(this.pubsubUrl);
     }
 
     this.wss = new WebSocket.Server({
-      port: options.port,
-      verifyClient: this.verifyClient(this.options.secret)
+      port: this.port,
+      verifyClient: this.verifyClient(this.secret)
     });
 
     this.wss.on('connection', this.onClientConnected.bind(this));
@@ -65,7 +60,7 @@ class VsSocket {
    */
   initPubsub(url) {
     this.pubsub = new Redpub(url);
-    this.pubsub.subscribe(this.options.channel);
+    this.pubsub.subscribe(this.channel);
 
     this.pubsub.on('message', function(channel, message) {
       const m = this.parseMessage(message);
@@ -86,7 +81,7 @@ class VsSocket {
    * @param {Function} cb - Callback function
    */
   start(cb) {
-    setInterval(this.ping.bind(this), this.options.pingInterval);
+    setInterval(this.ping.bind(this), this.pingInterval);
 
     if (cb) {
       cb();
@@ -115,10 +110,13 @@ class VsSocket {
   /**
    * Authenticate connection request using jwt.
    *
-   * @param {Object} info - Request data
-   * @param {Function} cb - Callback function
+   * @param {String} secret - Server secret
    */
   verifyClient(secret) {
+    if (!secret) {
+      return;
+    }
+
     return function(info, cb) {
       const token = qs.parse(url.parse(info.req.url).search).token;
 
@@ -264,7 +262,7 @@ class VsSocket {
    * @param {Object} m - Message object
    */
   publishMessage(m) {
-    this.pubsub.publish(this.options.channel, JSON.stringify(m));
+    this.pubsub.publish(this.channel, JSON.stringify(m));
   }
 
   /**
