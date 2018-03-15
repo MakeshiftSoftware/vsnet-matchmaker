@@ -1,6 +1,8 @@
+/* eslint-disable prefer-arrow-callback */
 const fs = require('fs');
 const path = require('path');
 const uuid = require('uuid/v4');
+const VsSocket = require('../socket');
 
 const MIN_RATING = 1;
 const MAX_RATING = 30;
@@ -12,7 +14,17 @@ const Protocol = {
   GAME_NOT_FOUND: 3
 };
 
-module.exports = (server) => {
+const script = fs.readFileSync(path.resolve(__dirname, '../scripts/matchmaker.lua'));
+
+class MatchmakingManager {
+  constructor() {
+    this.server = new VsSocket();
+    this.server.defineCommand('match', script);
+    this.server.onConnect(this.onClientConnected);
+    this.server.onDisconnect(this.onClientDisconnected);
+    this.server.on(Protocol.FIND_GAME, this.findGame);
+  }
+
   /**
    * Find game handler
    * Attempt to match user to another user in matchmaking queue
@@ -22,7 +34,7 @@ module.exports = (server) => {
    * @param {Object} m - Message object
    * @param {Object} socket - Socket connection of originating request
    */
-  async function findGame(m, socket) {
+  async findGame(m, socket) {
     try {
       const userId = socket.id;
       const userRating = m.data.rating;
@@ -33,13 +45,13 @@ module.exports = (server) => {
         return;
       }
 
-      const [match, valid] = await server.store.match(userId, userRating);
+      const [match, valid] = await this.server.store.match(userId, userRating);
 
       if (valid) {
         if (match) {
-          onGameFound(match, socket);
+          this.onGameFound(match, socket);
         } else {
-          onGameNotFound(socket);
+          this.onGameNotFound(socket);
         }
       }
     } catch (err) {
@@ -54,17 +66,17 @@ module.exports = (server) => {
    * @param {String} matchId - User id of matched user
    * @param {Object} socket - Socket connection of originating request
    */
-  function onGameFound(matchId, socket) {
+  onGameFound(matchId, socket) {
     const message = {
-      type: Protocol.GAME_FOUND,
       data: {
+        type: Protocol.GAME_FOUND,
         gameId: uuid()
       }
     };
 
-    server.sendMessage(message, socket);
+    this.server.sendMessage(message, socket);
 
-    server.publishMessage({
+    this.server.publishMessage({
       data: message,
       recipient: matchId
     });
@@ -76,12 +88,14 @@ module.exports = (server) => {
    *
    * @param {Object} socket - Socket connection of originating request
    */
-  function onGameNotFound(socket) {
+  onGameNotFound(socket) {
     const message = {
-      type: Protocol.GAME_NOT_FOUND
+      data: {
+        type: Protocol.GAME_NOT_FOUND
+      }
     };
 
-    server.sendMessage(message, socket);
+    this.server.sendMessage(message, socket);
   }
 
   /**
@@ -90,12 +104,14 @@ module.exports = (server) => {
    *
    * @param {Object} socket - New socket connection
    */
-  function onClientConnected(socket) {
+  onClientConnected(socket) {
     const message = {
-      type: Protocol.CONNECTED
+      data: {
+        type: Protocol.CONNECTED
+      }
     };
 
-    server.sendMessage(message, socket);
+    this.server.sendMessage(message, socket);
   }
 
   /**
@@ -104,13 +120,39 @@ module.exports = (server) => {
    *
    * @param {Object} socket - Disconnected socket
    */
-  function onClientDisconnected(socket) {  // eslint-disable-line
+   onClientDisconnected(socket) {  // eslint-disable-line
     // todo
   }
 
-  const script = fs.readFileSync(path.resolve(__dirname, '../scripts/matchmaker.lua'));
-  server.defineCommand('match', script);
-  server.onConnect(onClientConnected);
-  server.onDisconnect(onClientDisconnected);
-  server.on(Protocol.FIND_GAME, findGame);
-};
+  /**
+   * Stop server and cleanup
+   *
+   * @param {Function} cb - callback function
+   */
+  start(cb) {
+    this.server.start();
+
+    if (cb) {
+      cb();
+    }
+  }
+
+  /**
+   * Stop server and cleanup
+   *
+   * @param {Function} cb - callback function
+   */
+  async stop(cb) {
+    try {
+      await this.server.stop();
+
+      if (cb) {
+        cb();
+      }
+    } catch (err) {
+      cb(err);
+    }
+  }
+}
+
+module.exports = MatchmakingManager;

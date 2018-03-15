@@ -20,7 +20,7 @@ class VsSocket {
   constructor(options) {
     options = options || {};
     this.pingInterval = options.pingInterval || DEFAULT_PING_INTERVAL;
-    this.channel = options.channel || DEFAULT_CHANNEL;
+    this.channels = options.channels || [DEFAULT_CHANNEL];
     this.secret = process.env.APP_SECRET;
     this.pubsubUrl = process.env.REDIS_PUBSUB_URL;
     this.storeUrl = process.env.REDIS_STORE_URL;
@@ -60,7 +60,10 @@ class VsSocket {
    */
   initPubsub(url) {
     this.pubsub = new Redpub(url);
-    this.pubsub.subscribe(this.channel);
+
+    for (let i = 0; i < this.channels.length; ++i) {
+      this.pubsub.subscribe(this.channels[i]);
+    }
 
     this.pubsub.on('message', function(channel, message) {
       const m = this.parseMessage(message);
@@ -80,31 +83,18 @@ class VsSocket {
    *
    * @param {Function} cb - Callback function
    */
-  start(cb) {
+  start() {
     setInterval(this.ping.bind(this), this.pingInterval);
-
-    if (cb) {
-      cb();
-    }
   }
 
   /**
    * Stop server.
-   *
-   * @param {Function} cb - Callback function
    */
-  async stop(cb) {
-    try {
-      await this.pubsub.close();
-
-      if (this.store) {
-        await this.store.close();
-      }
-
-      cb();
-    } catch (err) {
-      cb(err);
-    }
+  stop() {
+    return Promise.all([
+      this.pubsub.close(),
+      this.store.close()
+    ]);
   }
 
   /**
@@ -229,7 +219,7 @@ class VsSocket {
     const m = this.parseMessage(message);
 
     if (m) {
-      const handler = this.handlers[m.type];
+      const handler = this.handlers[m.data.type];
 
       if (handler) {
         handler(m, socket);
@@ -247,7 +237,6 @@ class VsSocket {
       const m = JSON.parse(message);
 
       return {
-        type: m.type,
         data: m.data,
         recipient: m.recipient
       };
@@ -260,9 +249,10 @@ class VsSocket {
    * Publish message
    *
    * @param {Object} m - Message object
+   * @param {String} channel - Channel to publish message to
    */
-  publishMessage(m) {
-    this.pubsub.publish(this.channel, JSON.stringify(m));
+  publishMessage(m, channel) {
+    this.pubsub.publish(channel, JSON.stringify(m));
   }
 
   /**
@@ -296,17 +286,17 @@ class VsSocket {
   /**
    * Send message to multiple users using an array of user ids.
    *
-   * @param {Object} mData - Message data
+   * @param {Object} data - Message data
    * @param {Array} ids - Array of user ids
    */
   relayMulti(data, ids) {
-    ids.forEach((id) => {
-      const socket = this.users[id];
+    for (let i = 0; i < ids.length; ++i) {
+      const socket = this.users[ids[i]];
 
       if (socket) {
         this.sendMessage(data, socket);
       }
-    });
+    }
   }
 
   /**

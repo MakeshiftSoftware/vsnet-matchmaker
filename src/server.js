@@ -1,9 +1,7 @@
-const VsSocket = require('./socket');
+const MatchmakingManager = require('./core/MatchmakingManager');
 
-const server = new VsSocket();
-
-// Attach event handlers
-require('./handlers')(server);
+// Initialize matchmaking manager
+const server = new MatchmakingManager();
 
 server.start(() => {
   process.on('SIGINT', () => {
