@@ -7,6 +7,7 @@ WORKDIR /app
 # Bundle app
 COPY src src/
 COPY package.json .
+COPY yarn.lock .
 COPY ecosystem.config.js .
 
 # Install app dependencies
