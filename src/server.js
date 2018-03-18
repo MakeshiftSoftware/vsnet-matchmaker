@@ -1,7 +1,13 @@
-const MatchmakingManager = require('./core/MatchmakingManager');
+const MatchmakingServer = require('./MatchmakingServer');
 
-// Initialize matchmaking manager
-const server = new MatchmakingManager();
+// Initialize matchmaking server
+const server = new MatchmakingServer({
+  port: process.env.PORT,
+  secret: process.env.APP_SECRET,
+  pubsubUrl: process.env.REDIS_PUBSUB_URL,
+  storeUrl: process.env.REDIS_STORE_URL,
+  sessionServiceUrl: process.env.SESSION_SERVICE_URL
+});
 
 server.start(() => {
   process.on('SIGINT', () => {

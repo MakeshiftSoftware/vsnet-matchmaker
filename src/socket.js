@@ -3,8 +3,7 @@ const WebSocket = require('uws');
 const url = require('url');
 const qs = require('query-string');
 const jwt = require('jsonwebtoken');
-const Redstore = require('./redstore');
-const Redpub = require('./redpub');
+const Redis = require('ioredis');
 
 function noop() {}
 
@@ -19,12 +18,13 @@ class VsSocket {
    */
   constructor(options) {
     options = options || {};
+    this.port = options.port;
+    this.secret = options.secret;
+    this.pubsubUrl = options.storeUrl;
+    this.storeUrl = options.storeUrl;
     this.pingInterval = options.pingInterval || DEFAULT_PING_INTERVAL;
     this.channels = options.channels || [DEFAULT_CHANNEL];
-    this.secret = process.env.APP_SECRET;
-    this.pubsubUrl = process.env.REDIS_PUBSUB_URL;
-    this.storeUrl = process.env.REDIS_STORE_URL;
-    this.port = process.env.PORT;
+
     this.users = {};
     this.handlers = {};
 
@@ -47,25 +47,26 @@ class VsSocket {
   /**
    * Initialize store connection.
    *
-   * @param {String} url - Store connection url
+   * @param {String} url - Redis connection url
    */
   initStore(url) {
-    this.store = new Redstore(url);
+    this.store = new Redis(url);
   }
 
   /**
    * Initialize pubsub connection.
    *
-   * @param {String} url - Pubsub connection url
+   * @param {String} url - Redis connection url
    */
   initPubsub(url) {
-    this.pubsub = new Redpub(url);
+    this.pub = new Redis(url);
+    this.sub = new Redis(url);
 
     for (let i = 0; i < this.channels.length; ++i) {
-      this.pubsub.subscribe(this.channels[i]);
+      this.sub.subscribe(this.channels[i]);
     }
 
-    this.pubsub.on('message', function(channel, message) {
+    this.sub.on('message', function(channel, message) {
       const m = this.parseMessage(message);
 
       if (m && m.data && m.recipient) {
@@ -80,8 +81,7 @@ class VsSocket {
 
   /**
    * Start server.
-   *
-   * @param {Function} cb - Callback function
+   * Start heartbeat interval
    */
   start() {
     setInterval(this.ping.bind(this), this.pingInterval);
@@ -89,12 +89,25 @@ class VsSocket {
 
   /**
    * Stop server.
+   * Close redis connections
    */
   stop() {
-    return Promise.all([
-      this.pubsub.close(),
-      this.store.close()
-    ]);
+    const actions = [];
+
+    if (this.pub) {
+      actions.push(this.pub.close());
+    }
+
+    if (this.sub) {
+      actions.push(this.sub.unsubscribe());
+      actions.push(this.sub.close());
+    }
+
+    if (this.store) {
+      actions.push(this.store.close());
+    }
+
+    return Promise.all(actions);
   }
 
   /**
@@ -306,7 +319,10 @@ class VsSocket {
    * @param {String} script - Lua script text
    */
   defineCommand(name, script) {
-    this.store.defineCommand(name, script);
+    this.store.defineCommand(name, {
+      lua: script,
+      numberOfKeys: 0
+    });
   }
 
   /**
