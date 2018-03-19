@@ -9,8 +9,7 @@
     "node": ">=8.0.0"
   },
   "scripts": {
-    "dev": "pm2-runtime start --watch ecosystem.config.js",
-    "prod": "pm2-runtime start --env production ecosystem.config.js",
+    "dev": "node ./src/server.js",
     "lint": "./node_modules/.bin/eslint src/**",
     "clean": "rm -rf node_modules && yarn cache clean && yarn",
     "nsp": "nsp check --output summary",

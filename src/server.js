@@ -1,24 +1,46 @@
+/* eslint-disable no-process-exit, no-console */
+const os = require('os');
+const cluster = require('cluster');
 const MatchmakingServer = require('./MatchmakingServer');
 
-// Initialize matchmaking server
-const server = new MatchmakingServer({
-  port: process.env.PORT,
-  secret: process.env.APP_SECRET,
-  pubsubUrl: process.env.REDIS_PUBSUB_URL,
-  storeUrl: process.env.REDIS_STORE_URL,
-  sessionServiceUrl: process.env.SESSION_SERVICE_ADDR
-});
-
-server.start(() => {
-  process.on('SIGINT', () => {
-    server.stop((err) => {
-      process.exit(err ? 1 : 0);  // eslint-disable-line
-    });
-  });
-
-  if (process.send) {
-    process.send('ready');
+if (cluster.isMaster) {
+  for (let i = 0; i < os.cpus().length; ++i) {
+    cluster.fork();
   }
 
-  console.log('vsnet-matchmaker: listening on', process.env.PORT); // eslint-disable-line
-});
+  cluster.on('exit', (worker) => {
+    if (!worker.exitedAfterDisconnect) {
+      console.log('[Error][matchmaker] Worker has died', worker.process.pid);
+      cluster.fork();
+    }
+  });
+} else {
+  // Initialize matchmaking server
+  const server = new MatchmakingServer({
+    port: process.env.PORT,
+    secret: process.env.APP_SECRET,
+    pubsub: process.env.REDIS_PUBSUB_SERVICE,
+    store: process.env.REDIS_STORE_SERVICE,
+    sessionService: process.env.SESSION_SERVICE
+  });
+
+  server.start(() => {
+    process.on('SIGINT', () => {
+      server.stop((err) => {
+        process.exit(err ? 1 : 0);
+      });
+    });
+
+    process.on('SIGTERM', () => {
+      server.stop((err) => {
+        process.exit(err ? 1 : 0);
+      });
+    });
+
+    if (process.send) {
+      process.send('ready');
+    }
+
+    console.log('vsnet-matchmaker: listening on', process.env.PORT);
+  });
+}

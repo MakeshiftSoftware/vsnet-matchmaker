@@ -20,7 +20,6 @@ module.exports = {
     'prefer-template': 0,
     'consistent-return': 0,
     'object-shorthand': 0,
-    'arrow-parens': 0,
-    'no-debugger': process.env.NODE_ENV === 'production' ? 2 : 0
+    'arrow-parens': 0
   }
 };

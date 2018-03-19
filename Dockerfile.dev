@@ -1,14 +1,11 @@
 FROM node:8
 
-RUN yarn global add pm2
-
 WORKDIR /app
 
 # Bundle app
 COPY src src/
 COPY package.json .
 COPY yarn.lock .
-COPY ecosystem.config.js .
 
 # Install app dependencies
 RUN yarn install --production

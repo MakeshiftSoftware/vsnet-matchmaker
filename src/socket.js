@@ -20,8 +20,8 @@ class VsSocket {
     options = options || {};
     this.port = options.port;
     this.secret = options.secret;
-    this.pubsubUrl = options.storeUrl;
-    this.storeUrl = options.storeUrl;
+    this.pubsub = options.pubsub;
+    this.store = options.store;
     this.pingInterval = options.pingInterval || DEFAULT_PING_INTERVAL;
     this.channels = options.channels || [DEFAULT_CHANNEL];
 

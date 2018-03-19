@@ -29,7 +29,7 @@ class MatchmakingServer {
       secret,
       pubsubUrl,
       storeUrl,
-      sessionServiceAddr
+      sessionService
     } = options;
 
     if (!secret) {
@@ -48,7 +48,7 @@ class MatchmakingServer {
     this.server.onConnect(this.onClientConnected);
     this.server.onDisconnect(this.onClientDisconnected);
     this.server.on(Protocol.FIND_GAME, this.findGame);
-    this.sessionServiceUrl = sessionServiceAddr + '/session';
+    this.sessionService = sessionService + '/session';
   }
 
   /**
