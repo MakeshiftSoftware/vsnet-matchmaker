@@ -29,11 +29,11 @@ class MatchmakingServer {
       secret,
       pubsubUrl,
       storeUrl,
-      sessionServiceUrl
+      sessionServiceAddr
     } = options;
 
     if (!secret) {
-      console.log('[Warn][matchmaker] No secret provided, server will be accessible to any client with the server IP and Port');
+      console.log('[Warn][matchmaker] No secret provided, connecting clients will not be verified');
     }
 
     this.server = new VsSocket({
@@ -48,7 +48,7 @@ class MatchmakingServer {
     this.server.onConnect(this.onClientConnected);
     this.server.onDisconnect(this.onClientDisconnected);
     this.server.on(Protocol.FIND_GAME, this.findGame);
-    this.sessionServiceUrl = sessionServiceUrl + '/session';
+    this.sessionServiceUrl = sessionServiceAddr + '/session';
   }
 
   /**

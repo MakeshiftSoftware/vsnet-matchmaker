@@ -6,7 +6,7 @@ const server = new MatchmakingServer({
   secret: process.env.APP_SECRET,
   pubsubUrl: process.env.REDIS_PUBSUB_URL,
   storeUrl: process.env.REDIS_STORE_URL,
-  sessionServiceUrl: process.env.SESSION_SERVICE_URL
+  sessionServiceUrl: process.env.SESSION_SERVICE_ADDR
 });
 
 server.start(() => {
