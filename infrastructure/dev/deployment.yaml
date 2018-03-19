@@ -1,0 +1,48 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: vsnet-matchmaker
+spec:
+  replicas: 5
+  template:
+    metadata:
+      labels:
+        role: vsnet-matchmaker-server
+    spec:
+      nodeSelector:
+        role: apps
+      containers:
+      - name: vsnet-matchmaker
+        image: docker.io/makeshiftsoftware/vsnet-matchmaker-dev
+        imagePullPolicy: Always
+        readinessProbe:
+          httpGet:
+            path: /readiness
+            port: 8080
+            scheme: HTTP
+          periodSeconds: 5
+          timeoutSeconds: 3
+        env:
+          - name: PORT
+            value: "8080"
+          - name: REDIS_STORE_SERVICE
+            value: matchmaker-redis-store-service:6379
+          - name: REDIS_PUBSUB_SERVICE
+            value: matchmaker-redis-pubsub:6379
+          - name: APP_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: secret
+                key: app_secret
+          - name: REDIS_STORE_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: secret
+                key: matchmaker_redis_store_password
+          - name: REDIS_PUBSUB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: secret
+                key: matchmaker_redis_pubsub_password
+        ports:
+        - containerPort: 8080
