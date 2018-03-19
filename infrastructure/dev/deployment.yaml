@@ -15,12 +15,27 @@ spec:
       - name: vsnet-matchmaker
         image: docker.io/makeshiftsoftware/vsnet-matchmaker-dev
         imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
         readinessProbe:
+          failureThreshold: 3
           httpGet:
-            path: /readiness
+            path: /healthz
             port: 8080
             scheme: HTTP
+          initialDelaySeconds: 5
           periodSeconds: 5
+          successThreshold: 1
+          timeoutSeconds: 3
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /healthz
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          successThreshold: 1
           timeoutSeconds: 3
         env:
           - name: PORT
@@ -44,5 +59,3 @@ spec:
               secretKeyRef:
                 name: secret
                 key: matchmaker_redis_pubsub_password
-        ports:
-        - containerPort: 8080

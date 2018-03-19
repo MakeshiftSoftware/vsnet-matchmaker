@@ -1,6 +1,8 @@
 /* eslint-disable prefer-arrow-callback */
 const WebSocket = require('uws');
 const url = require('url');
+const express = require('express');
+const http = require('http');
 const qs = require('query-string');
 const jwt = require('jsonwebtoken');
 const Redis = require('ioredis');
@@ -29,15 +31,23 @@ class VsSocket {
     this.handlers = {};
 
     if (this.storeUrl) {
-      this.initStore(this.storeUrl);
+      this.initStore(this.store);
     }
 
     if (this.pubsubUrl) {
-      this.initPubsub(this.pubsubUrl);
+      this.initPubsub(this.pubsub);
     }
 
+    const app = express();
+
+    app.get('/healthz', function(req, res) {
+      res.sendStatus(200);
+    });
+
+    this.server = http.createServer(app);
+
     this.wss = new WebSocket.Server({
-      port: this.port,
+      server: this.server,
       verifyClient: this.verifyClient(this.secret)
     });
 
@@ -84,7 +94,9 @@ class VsSocket {
    * Start heartbeat interval
    */
   start() {
-    setInterval(this.ping.bind(this), this.pingInterval);
+    this.server.listen(this.port, function() {
+      setInterval(this.ping.bind(this), this.pingInterval);
+    });
   }
 
   /**
