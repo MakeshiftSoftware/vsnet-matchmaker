@@ -19,35 +19,58 @@ class VsSocket {
    * @param {Object} options - Server options
    */
   constructor(options) {
-    options = options || {};
-    this.port = options.port;
-    this.secret = options.secret;
-    this.pubsub = options.pubsub;
-    this.store = options.store;
-    this.pingInterval = options.pingInterval || DEFAULT_PING_INTERVAL;
-    this.channels = options.channels || [DEFAULT_CHANNEL];
+    const {
+      port,
+      secret,
+      redisStoreUrl,
+      redisPubsubUrl,
+      pingInterval,
+      channels
+    } = options;
+
+    this.port = port;
+    this.secret = secret;
+    this.redisPubsubUrl = redisPubsubUrl;
+    this.redisStoreUrl = redisStoreUrl;
+    this.pingInterval = pingInterval || DEFAULT_PING_INTERVAL;
+    this.channels = channels || [DEFAULT_CHANNEL];
 
     this.users = {};
     this.handlers = {};
 
-    if (this.storeUrl) {
-      this.initStore(this.store);
+    if (this.redisStoreUrl) {
+      this.initStore(this.redisStoreUrl);
     }
 
-    if (this.pubsubUrl) {
-      this.initPubsub(this.pubsub);
+    if (this.redisPubsubUrl) {
+      this.initPubsub(this.redisPubsubUrl);
     }
 
+    this.initApp();
+    this.initServer();
+  }
+
+  /**
+   * Initialize app and routes
+   */
+  initApp() {
     const app = express();
 
     app.get('/healthz', function(req, res) {
       res.sendStatus(200);
     });
 
-    this.server = http.createServer(app);
+    this.app = app;
+  }
+
+  /**
+   * Initialize http server and websocket server
+   */
+  initServer() {
+    const server = http.createServer(this.app);
 
     this.wss = new WebSocket.Server({
-      server: this.server,
+      server: server,
       verifyClient: this.verifyClient(this.secret)
     });
 

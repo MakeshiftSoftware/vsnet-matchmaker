@@ -19,8 +19,8 @@ if (cluster.isMaster) {
   const server = new MatchmakingServer({
     port: process.env.PORT,
     secret: process.env.APP_SECRET,
-    pubsub: process.env.REDIS_PUBSUB_SERVICE,
-    store: process.env.REDIS_STORE_SERVICE,
+    redisPubsubUrl: process.env.REDIS_PUBSUB_SERVICE,
+    redisStoreUrl: process.env.REDIS_STORE_SERVICE,
     sessionService: process.env.SESSION_SERVICE
   });
 
