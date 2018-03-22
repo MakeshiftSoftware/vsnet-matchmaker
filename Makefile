@@ -1,13 +1,14 @@
-TAG_DEV=${DOCKER_ID_USER}/vsnet-matchmaker-dev
+VERSION=0.1
+TAG=makeshiftsoftware/vsnet-matchmaker:$(VERSION)
 
-build-dev:
-	docker build -f Dockerfile.dev --tag $(TAG_DEV) .
+mkfile_path := $(abspath $(lastword $(MAKEFILE_LIST)))
+current_path := $(dir $(mkfile_path))
 
-push-dev:
-	docker push $(TAG_DEV)
+build:
+	docker build -f Dockerfile.dev --tag $(TAG) $(current_path)
 
-clean-dev:
-	docker rmi $(TAG_DEV)
+push:
+	docker push $(TAG)
 
-pull-dev:
-	docker pull $(TAG_DEV)
+clean:
+	docker rmi $(TAG)

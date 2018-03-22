@@ -129,9 +129,9 @@ class MatchmakingServer {
    */
   async createSessionForGame(match) {
     try {
-      console.log('[Info][matchmaker] Creating a new session:', this.sessionServiceUrl);
+      console.log('[Info][matchmaker] Creating a new session:', this.sessionService);
       // create session
-      const res = await http.post(this.sessionServiceUrl);
+      const res = await http.post(this.sessionService);
       match.game.sessionId = res.data.id;
       console.log('[Info][matchmaker] Created session:', match.game.sessionId);
       // attempt to get ip and port for this session
