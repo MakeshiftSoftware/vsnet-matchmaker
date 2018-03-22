@@ -27,8 +27,8 @@ class MatchmakingServer {
     const {
       port,
       secret,
-      pubsubUrl,
-      storeUrl,
+      pubsub,
+      store,
       sessionService
     } = options;
 
@@ -39,8 +39,8 @@ class MatchmakingServer {
     this.server = new VsSocket({
       port,
       secret,
-      pubsubUrl,
-      storeUrl
+      pubsub,
+      store
     });
 
     const script = fs.readFileSync(path.resolve(__dirname, './scripts/matchmaker.lua'));
@@ -130,14 +130,17 @@ class MatchmakingServer {
   async createSessionForGame(match) {
     try {
       console.log('[Info][matchmaker] Creating a new session:', this.sessionService);
+
       // create session
       const res = await http.post(this.sessionService);
       match.game.sessionId = res.data.id;
+
       console.log('[Info][matchmaker] Created session:', match.game.sessionId);
+
       // attempt to get ip and port for this session
       this.getSessionIPAndPort(match);
     } catch (err) {
-      console.log('[Error][matchmaker] Error calling /session:', err.message);
+      console.log('[Error][matchmaker] Error creating session:', err.message);
     }
   }
 
@@ -154,21 +157,21 @@ class MatchmakingServer {
       try {
         // attempt to get session info
         const res = await http.get(this.sessionServiceUrl, {
-          id: match.game.sessionId
+          params: {
+            id: match.game.sessionId
+          }
         });
 
-        const session = res.data.session;
+        const session = res.data;
         match.game.ip = session.ip;
         match.game.port = session.port;
+
         console.log('[Info][matchmaker] Recieved session data:', session.port + ':' + session.ip);
 
         const message = {
           type: Protocol.GAME_FOUND,
           data: match.game
         };
-
-        // todo: update game session info in redis
-        // updateGame(match.game)
 
         // send game found message to players
         this.server.sendMessage(message, match.currentSocket);
@@ -178,6 +181,7 @@ class MatchmakingServer {
         });
       } catch (err) {
         console.log('[Info][matchmaker] Unable to get session info, trying again');
+
         attempts += 1;
 
         if (attempts > SESSION_MAX_RETRIES) {

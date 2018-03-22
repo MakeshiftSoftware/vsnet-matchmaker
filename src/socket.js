@@ -22,28 +22,24 @@ class VsSocket {
     const {
       port,
       secret,
-      redisStoreUrl,
-      redisPubsubUrl,
-      pingInterval,
-      channels
+      pubsub,
+      store,
+      pingInterval
     } = options;
 
     this.port = port;
     this.secret = secret;
-    this.redisPubsubUrl = redisPubsubUrl;
-    this.redisStoreUrl = redisStoreUrl;
     this.pingInterval = pingInterval || DEFAULT_PING_INTERVAL;
-    this.channels = channels || [DEFAULT_CHANNEL];
 
     this.users = {};
     this.handlers = {};
 
-    if (this.redisStoreUrl) {
-      this.initStore(this.redisStoreUrl);
+    if (store) {
+      this.initStore(store);
     }
 
-    if (this.redisPubsubUrl) {
-      this.initPubsub(this.redisPubsubUrl);
+    if (pubsub) {
+      this.initPubsub(pubsub);
     }
 
     this.initApp();
@@ -80,23 +76,37 @@ class VsSocket {
   /**
    * Initialize store connection.
    *
-   * @param {String} url - Redis connection url
+   * @param {Object} config - Store config
    */
-  initStore(url) {
-    this.store = new Redis(url);
+  initStore(config) {
+    const options = {};
+
+    if (config.password) {
+      options.password = config.password;
+    }
+
+    this.store = new Redis(config.url, options);
   }
 
   /**
    * Initialize pubsub connection.
    *
-   * @param {String} url - Redis connection url
+   * @param {Object} config - Pubsub config
    */
-  initPubsub(url) {
-    this.pub = new Redis(url);
-    this.sub = new Redis(url);
+  initPubsub(config) {
+    const options = {};
 
-    for (let i = 0; i < this.channels.length; ++i) {
-      this.sub.subscribe(this.channels[i]);
+    if (config.password) {
+      options.password = config.password;
+    }
+
+    this.pub = new Redis(config.url, options);
+    this.sub = new Redis(config.url, options);
+
+    const channels = config.channels || [DEFAULT_CHANNEL];
+
+    for (let i = 0; i < channels.length; ++i) {
+      this.sub.subscribe(channels[i]);
     }
 
     this.sub.on('message', function(channel, message) {
