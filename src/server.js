@@ -11,42 +11,45 @@ if (cluster.isMaster) {
   cluster.on('exit', (worker) => {
     if (!worker.exitedAfterDisconnect) {
       console.log('[Error][matchmaker] Worker has died', worker.process.pid);
+
       cluster.fork();
     }
   });
 } else {
+  const port = process.env.PORT;
+  const secret = process.env.SECRET;
+  const sessionService = process.env.SESSION_SERVICE;
+
+  const pubsub = {
+    url: process.env.REDIS_PUBSUB_SERVICE,
+    password: process.env.REDIS_PUBSUB_PASSWORD
+  };
+
+  const store = {
+    url: process.env.REDIS_STORE_SERVICE,
+    password: process.env.REDIS_STORE_PASSWORD
+  };
+
   // Initialize matchmaking server
   const server = new MatchmakingServer({
-    port: process.env.PORT,
-    secret: process.env.APP_SECRET,
-    pubsub: {
-      url: process.env.REDIS_PUBSUB_SERVICE,
-      password: process.env.REDIS_PUBSUB_PASSWORD
-    },
-    store: {
-      url: process.env.REDIS_STORE_SERVICE,
-      password: process.env.REDIS_STORE_PASSWORD
-    },
-    sessionService: process.env.SESSION_SERVICE
+    port,
+    secret,
+    pubsub,
+    store,
+    sessionService
   });
 
   server.start(() => {
     process.on('SIGINT', () => {
-      server.stop((err) => {
-        process.exit(err ? 1 : 0);
-      });
+      server.stop(stop);
     });
 
     process.on('SIGTERM', () => {
-      server.stop((err) => {
-        process.exit(err ? 1 : 0);
-      });
+      server.stop(stop);
     });
-
-    if (process.send) {
-      process.send('ready');
-    }
-
-    console.log('vsnet-matchmaker: listening on', process.env.PORT);
   });
+}
+
+function stop(err) {
+  process.exit(err ? 1 : 0);
 }

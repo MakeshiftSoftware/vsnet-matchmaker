@@ -1,4 +1,4 @@
-/* eslint-disable prefer-arrow-callback */
+/* eslint-disable prefer-arrow-callback, no-console */
 const WebSocket = require('uws');
 const url = require('url');
 const express = require('express');
@@ -14,11 +14,13 @@ const DEFAULT_CHANNEL = 'global';
 
 class VsSocket {
   /**
-   * Initialize socket server.
+   * Initialize socket server
    *
    * @param {Object} options - Server options
    */
   constructor(options) {
+    console.log('[Info][social] Initializing socket server');
+
     const {
       port,
       secret,
@@ -50,6 +52,8 @@ class VsSocket {
    * Initialize app and routes
    */
   initApp() {
+    console.log('[Info][social] Initializing express app');
+
     const app = express();
 
     app.get('/healthz', function(req, res) {
@@ -63,6 +67,8 @@ class VsSocket {
    * Initialize http server and websocket server
    */
   initServer() {
+    console.log('[Info][social] Initializing express server');
+
     const server = http.createServer(this.app);
 
     this.wss = new WebSocket.Server({
@@ -74,11 +80,13 @@ class VsSocket {
   }
 
   /**
-   * Initialize store connection.
+   * Initialize store connection
    *
    * @param {Object} config - Store config
    */
   initStore(config) {
+    console.log('[Info][social] Initializing redis store');
+
     const options = {};
 
     if (config.password) {
@@ -89,11 +97,13 @@ class VsSocket {
   }
 
   /**
-   * Initialize pubsub connection.
+   * Initialize pubsub connection
    *
    * @param {Object} config - Pubsub config
    */
   initPubsub(config) {
+    console.log('[Info][social] Initializing redis pubsub');
+
     const options = {};
 
     if (config.password) {
@@ -110,9 +120,13 @@ class VsSocket {
     }
 
     this.sub.on('message', function(channel, message) {
+      console.log('[Info][social] Received pubsub message:', message);
+
       const m = this.parseMessage(message);
 
       if (m && m.data && m.recipient) {
+        console.log('[Info][social] Publishing message');
+
         if (Array.isArray(m.recipient)) {
           this.relayMulti(m.data, m.recipient);
         } else {
@@ -123,20 +137,26 @@ class VsSocket {
   }
 
   /**
-   * Start server.
+   * Start server
    * Start heartbeat interval
    */
   start() {
+    console.log('[Info][social] Starting socket server');
+
     this.server.listen(this.port, function() {
+      console.log('[Info][social] Socket server started on port', this.port);
+
       setInterval(this.ping.bind(this), this.pingInterval);
     });
   }
 
   /**
-   * Stop server.
+   * Stop server
    * Close redis connections
    */
   stop() {
+    console.log('[Info][social] Stopping socket server');
+
     const actions = [];
 
     if (this.pub) {
@@ -156,7 +176,7 @@ class VsSocket {
   }
 
   /**
-   * Authenticate connection request using jwt.
+   * Authenticate connection request using jwt
    *
    * @param {String} secret - Server secret
    */
@@ -184,7 +204,7 @@ class VsSocket {
   }
 
   /**
-   * Client connected handler.
+   * Client connected handler
    *
    * @param {Object} socket - Socket object
    */
@@ -216,11 +236,11 @@ class VsSocket {
       server.handlers.connected(socket);
     }
 
-    console.log('Client %s connected', user.id); // eslint-disable-line
+    console.log('[Info][social] Client connected to socket server:', user.id);
   }
 
   /**
-   * Client disconnected handler.
+   * Client disconnected handler
    *
    * @param {Object} socket - Socket object
    */
@@ -233,11 +253,11 @@ class VsSocket {
       server.handlers.disconnected(socket);
     }
 
-    console.log('Client %s disconnected', socket.id); // eslint-disable-line
+    console.log('[Info][social] Client disconnected from socket server:', socket.id);
   }
 
   /**
-   * Register callback function for an event.
+   * Register callback function for an event
    *
    * @param {String} event - Event name
    * @param {Function} callback - Callback function
@@ -247,7 +267,7 @@ class VsSocket {
   }
 
   /**
-   * Ping sockets to check if they are alive.
+   * Ping sockets to check if they are alive
    * TODO: cleanup disconnected sockets
    */
   ping() {
@@ -257,6 +277,8 @@ class VsSocket {
       const socket = server.wss.clients[i];
 
       if (socket.isAlive === false) {
+        console.log('[Info][social] Cleaning up dead socket:', socket.id);
+
         delete server.users[socket.id];
         return socket.terminate();
       }
@@ -267,13 +289,14 @@ class VsSocket {
   }
 
   /**
-   * Message received handler.
+   * Message received handler
    *
    * @param {String} message - Message json
    * @param {Object} socket - Socket object
    */
   onMessageReceived(message, socket) {
-    console.log('Received message from client:', message);  // eslint-disable-line
+    console.log('[Info][social] Received socket data:', message);
+
     const m = this.parseMessage(message);
 
     if (m) {
@@ -286,7 +309,7 @@ class VsSocket {
   }
 
   /**
-   * Parse incoming socket message.
+   * Parse incoming socket message
    *
    * @param {String} message - Socket message
    */
@@ -298,8 +321,8 @@ class VsSocket {
         data: m.data,
         recipient: m.recipient
       };
-    } catch (e) {
-      console.log(e); // eslint-disable-line
+    } catch (err) {
+      console.log('[Error][social] Unable to parse message:', err.message);
     }
   }
 
@@ -314,7 +337,7 @@ class VsSocket {
   }
 
   /**
-   * Send message to user.
+   * Send message to user
    *
    * @param {(String|Object)} message - The message string or object
    * @param {Object} socket - The socket object
@@ -328,7 +351,7 @@ class VsSocket {
   }
 
   /**
-   * Send message to a single user by user id.
+   * Send message to a single user by user id
    *
    * @param {Object} data - Message data
    * @param {String} id - User id
@@ -337,12 +360,14 @@ class VsSocket {
     const socket = this.users[id];
 
     if (socket) {
+      console.log('[Info][social] Recipient socket found, sending message');
+
       this.sendMessage(data, socket);
     }
   }
 
   /**
-   * Send message to multiple users using an array of user ids.
+   * Send message to multiple users using an array of user ids
    *
    * @param {Object} data - Message data
    * @param {Array} ids - Array of user ids
@@ -352,6 +377,8 @@ class VsSocket {
       const socket = this.users[ids[i]];
 
       if (socket) {
+        console.log('[Info][social] Recipient socket found, sending message');
+
         this.sendMessage(data, socket);
       }
     }
@@ -364,6 +391,8 @@ class VsSocket {
    * @param {String} script - Lua script text
    */
   defineCommand(name, script) {
+    console.log('[Info][social] Defining custom redis command:', name);
+
     this.store.defineCommand(name, {
       lua: script,
       numberOfKeys: 0
