@@ -2,6 +2,7 @@
 const os = require('os');
 const cluster = require('cluster');
 const MatchmakingServer = require('./MatchmakingServer');
+const log = require('./logger');
 
 if (cluster.isMaster) {
   for (let i = 0; i < os.cpus().length; ++i) {
@@ -10,7 +11,7 @@ if (cluster.isMaster) {
 
   cluster.on('exit', (worker) => {
     if (!worker.exitedAfterDisconnect) {
-      console.log('[Error][matchmaker] Worker has died', worker.process.pid);
+      log.error('[matchmaker] Worker has died: ' + worker.process.pid);
 
       cluster.fork();
     }

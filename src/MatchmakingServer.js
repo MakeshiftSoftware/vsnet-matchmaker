@@ -4,6 +4,7 @@ const path = require('path');
 const http = require('axios');
 const uuid = require('uuid/v4');
 const VsSocket = require('./socket');
+const log = require('./logger');
 
 const MIN_RATING = 1;
 const MAX_RATING = 30;
@@ -24,6 +25,8 @@ class MatchmakingServer {
    * @param {Object} options - Server options
    */
   constructor(options) {
+    log.info('[matchmaker] Initializing server');
+
     const {
       port,
       secret,
@@ -33,7 +36,7 @@ class MatchmakingServer {
     } = options;
 
     if (!secret) {
-      console.log('[Warn][matchmaker] No secret provided, connecting clients will not be verified');
+      log.warn('[matchmaker] No secret provided, connecting clients will not be verified');
     }
 
     this.server = new VsSocket({
@@ -61,6 +64,8 @@ class MatchmakingServer {
    * @param {Object} socket - Socket connection of originating request
    */
   async findGame(m, socket) {
+    log.info('[matchmaker] Attempting to find match for game');
+
     try {
       const userId = socket.id;
       const userRating = m.data.rating;
@@ -81,7 +86,7 @@ class MatchmakingServer {
         }
       }
     } catch (err) {
-      console.log('[Error][matchmaker] Error finding match: ', err.message); // eslint-disable-line
+      log.error('[matchmaker] Error finding match: ' + err.message);
     }
   }
 
@@ -93,6 +98,8 @@ class MatchmakingServer {
    * @param {Object} socket - Socket connection of originating request
    */
   onMatchFound(matchId, socket) {
+    log.info('[matchmaker] Match found with id: ' + matchId);
+
     const match = {
       currentSocket: socket,
       matchId: matchId,
@@ -111,6 +118,8 @@ class MatchmakingServer {
    * @param {Object} socket - Socket connection of originating request
    */
   onMatchNotFound(socket) {
+    log.info('[matchmaker] Match not found, sending notification');
+
     const message = {
       data: {
         type: Protocol.GAME_NOT_FOUND
@@ -129,18 +138,18 @@ class MatchmakingServer {
    */
   async createSessionForGame(match) {
     try {
-      console.log('[Info][matchmaker] Creating a new session:', this.sessionService);
+      log.info('[matchmaker] Creating new session');
 
       // create session
       const res = await http.post(this.sessionService);
       match.game.sessionId = res.data.id;
 
-      console.log('[Info][matchmaker] Created session:', match.game.sessionId);
+      log.info('[matchmaker] Created session: ' + match.game.sessionId);
 
       // attempt to get ip and port for this session
       this.getSessionIPAndPort(match);
     } catch (err) {
-      console.log('[Error][matchmaker] Error creating session:', err.message);
+      console.log('[Error][matchmaker] Error creating session: ' + err.message);
     }
   }
 
@@ -151,6 +160,8 @@ class MatchmakingServer {
    * @param {Object} match - Match object
    */
   getSessionIPAndPort(match) {
+    log.info('[matchmaker] Retrieving session ip and port');
+
     let attempts = 0;
 
     async function attempt() {
@@ -166,7 +177,7 @@ class MatchmakingServer {
         match.game.ip = session.ip;
         match.game.port = session.port;
 
-        console.log('[Info][matchmaker] Recieved session data:', session.port + ':' + session.ip);
+        log.info('[matchmaker] Recieved session data: ' + session.port + ':' + session.ip);
 
         const message = {
           type: Protocol.GAME_FOUND,
@@ -180,7 +191,7 @@ class MatchmakingServer {
           recipient: match.matchId
         });
       } catch (err) {
-        console.log('[Info][matchmaker] Unable to get session info, trying again');
+        log.info('[matchmaker] Unable to get session info, trying again');
 
         attempts += 1;
 
@@ -214,6 +225,8 @@ class MatchmakingServer {
    * @param {Object} socket - New socket connection
    */
   onClientConnected(socket) {
+    log.info('[matchmaker] Client connected: ' + socket.id);
+
     const message = {
       data: {
         type: Protocol.CONNECTED
@@ -229,8 +242,8 @@ class MatchmakingServer {
    *
    * @param {Object} socket - Disconnected socket
    */
-   onClientDisconnected(socket) {  // eslint-disable-line
-    // todo
+  onClientDisconnected(socket) {
+    log.info('[matchmaker] Client disconnected: ' + socket.id);
   }
 
   /**
@@ -239,6 +252,8 @@ class MatchmakingServer {
    * @param {Function} cb - callback function
    */
   start(cb) {
+    log.info('[matchmaker] Starting server');
+
     this.server.start();
 
     if (cb) {
@@ -252,13 +267,19 @@ class MatchmakingServer {
    * @param {Function} cb - callback function
    */
   async stop(cb) {
+    log.info('[matchmaker] Stopping server');
+
     try {
       await this.server.stop();
+
+      log.info('[matchmaker] Server stopped successfully');
 
       if (cb) {
         cb();
       }
     } catch (err) {
+      log.error('[matchmaker] Error stopping server: ' + err.message);
+
       cb(err);
     }
   }

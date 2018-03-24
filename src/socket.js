@@ -1,4 +1,4 @@
-/* eslint-disable prefer-arrow-callback, no-console */
+/* eslint-disable prefer-arrow-callback */
 const WebSocket = require('uws');
 const url = require('url');
 const express = require('express');
@@ -6,6 +6,7 @@ const http = require('http');
 const qs = require('query-string');
 const jwt = require('jsonwebtoken');
 const Redis = require('ioredis');
+const log = require('./logger');
 
 function noop() {}
 
@@ -19,7 +20,7 @@ class VsSocket {
    * @param {Object} options - Server options
    */
   constructor(options) {
-    console.log('[Info][social] Initializing socket server');
+    log.info('[matchmaker] Initializing socket server');
 
     const {
       port,
@@ -52,7 +53,7 @@ class VsSocket {
    * Initialize app and routes
    */
   initApp() {
-    console.log('[Info][social] Initializing express app');
+    log.info('[matchmaker] Initializing express app');
 
     const app = express();
 
@@ -67,7 +68,7 @@ class VsSocket {
    * Initialize http server and websocket server
    */
   initServer() {
-    console.log('[Info][social] Initializing express server');
+    log.log('[matchmaker] Initializing express server');
 
     const server = http.createServer(this.app);
 
@@ -77,6 +78,7 @@ class VsSocket {
     });
 
     this.wss.on('connection', this.onClientConnected.bind(this));
+    this.server = server;
   }
 
   /**
@@ -85,7 +87,7 @@ class VsSocket {
    * @param {Object} config - Store config
    */
   initStore(config) {
-    console.log('[Info][social] Initializing redis store');
+    log.info('[matchmaker] Initializing redis store');
 
     const options = {};
 
@@ -102,7 +104,7 @@ class VsSocket {
    * @param {Object} config - Pubsub config
    */
   initPubsub(config) {
-    console.log('[Info][social] Initializing redis pubsub');
+    log.info('[matchmaker] Initializing redis pubsub');
 
     const options = {};
 
@@ -120,12 +122,12 @@ class VsSocket {
     }
 
     this.sub.on('message', function(channel, message) {
-      console.log('[Info][social] Received pubsub message:', message);
+      log.info('[matchmaker] Received pubsub message: ' + message);
 
       const m = this.parseMessage(message);
 
       if (m && m.data && m.recipient) {
-        console.log('[Info][social] Publishing message');
+        log.info('[matchmaker] Publishing message');
 
         if (Array.isArray(m.recipient)) {
           this.relayMulti(m.data, m.recipient);
@@ -141,12 +143,14 @@ class VsSocket {
    * Start heartbeat interval
    */
   start() {
-    console.log('[Info][social] Starting socket server');
+    log.info('[matchmaker] Starting socket server');
+
+    const server = this;
 
     this.server.listen(this.port, function() {
-      console.log('[Info][social] Socket server started on port', this.port);
+      log.info('[matchmaker] Socket server started on port ' + server.port);
 
-      setInterval(this.ping.bind(this), this.pingInterval);
+      setInterval(server.ping.bind(server), server.pingInterval);
     });
   }
 
@@ -155,7 +159,7 @@ class VsSocket {
    * Close redis connections
    */
   stop() {
-    console.log('[Info][social] Stopping socket server');
+    log.info('[matchmaker] Stopping socket server');
 
     const actions = [];
 
@@ -236,7 +240,7 @@ class VsSocket {
       server.handlers.connected(socket);
     }
 
-    console.log('[Info][social] Client connected to socket server:', user.id);
+    log.info('[matchmaker] New socket connection with id: ' + user.id);
   }
 
   /**
@@ -253,7 +257,7 @@ class VsSocket {
       server.handlers.disconnected(socket);
     }
 
-    console.log('[Info][social] Client disconnected from socket server:', socket.id);
+    log.info('[matchmaker] Socket disconnected: ' + socket.id);
   }
 
   /**
@@ -277,7 +281,7 @@ class VsSocket {
       const socket = server.wss.clients[i];
 
       if (socket.isAlive === false) {
-        console.log('[Info][social] Cleaning up dead socket:', socket.id);
+        log.info('[matchmaker] Cleaning up dead socket: ' + socket.id);
 
         delete server.users[socket.id];
         return socket.terminate();
@@ -295,7 +299,7 @@ class VsSocket {
    * @param {Object} socket - Socket object
    */
   onMessageReceived(message, socket) {
-    console.log('[Info][social] Received socket data:', message);
+    log.info('[matchmaker] Received socket data: ' + message);
 
     const m = this.parseMessage(message);
 
@@ -322,7 +326,7 @@ class VsSocket {
         recipient: m.recipient
       };
     } catch (err) {
-      console.log('[Error][social] Unable to parse message:', err.message);
+      log.error('[matchmaker] Unable to parse message: ' + err.message);
     }
   }
 
@@ -360,7 +364,7 @@ class VsSocket {
     const socket = this.users[id];
 
     if (socket) {
-      console.log('[Info][social] Recipient socket found, sending message');
+      log.info('[matchmaker] Recipient socket found, sending message');
 
       this.sendMessage(data, socket);
     }
@@ -377,7 +381,7 @@ class VsSocket {
       const socket = this.users[ids[i]];
 
       if (socket) {
-        console.log('[Info][social] Recipient socket found, sending message');
+        log.info('[matchmaker] Recipient socket found, sending message');
 
         this.sendMessage(data, socket);
       }
@@ -391,7 +395,7 @@ class VsSocket {
    * @param {String} script - Lua script text
    */
   defineCommand(name, script) {
-    console.log('[Info][social] Defining custom redis command:', name);
+    log.info('[matchmaker] Defining custom redis command: ' + name);
 
     this.store.defineCommand(name, {
       lua: script,
