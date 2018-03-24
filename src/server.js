@@ -1,4 +1,4 @@
-/* eslint-disable no-process-exit, no-console */
+/* eslint-disable no-process-exit */
 const os = require('os');
 const cluster = require('cluster');
 const MatchmakingServer = require('./MatchmakingServer');

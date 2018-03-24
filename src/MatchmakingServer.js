@@ -1,4 +1,4 @@
-/* eslint-disable prefer-arrow-callback, no-console */
+/* eslint-disable prefer-arrow-callback */
 const fs = require('fs');
 const path = require('path');
 const http = require('axios');
@@ -149,7 +149,7 @@ class MatchmakingServer {
       // attempt to get ip and port for this session
       this.getSessionIPAndPort(match);
     } catch (err) {
-      console.log('[Error][matchmaker] Error creating session: ' + err.message);
+      log.error('[matchmaker] Error creating session: ' + err.message);
     }
   }
 
