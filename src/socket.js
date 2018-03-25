@@ -81,7 +81,7 @@ class VsSocket {
    * Initialize http server and websocket server
    */
   initServer() {
-    log.log('[socket] Initializing express server');
+    log.info('[socket] Initializing express server');
 
     const server = http.createServer(this.app);
 
