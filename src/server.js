@@ -40,7 +40,11 @@ if (cluster.isMaster) {
     sessionService
   });
 
-  server.start(() => {
+  server.start((err) => {
+    if (err) {
+      process.exit(1);
+    }
+
     process.on('SIGINT', () => {
       server.stop(stop);
     });

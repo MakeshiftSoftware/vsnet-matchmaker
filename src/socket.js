@@ -20,7 +20,7 @@ class VsSocket {
    * @param {Object} options - Server options
    */
   constructor(options) {
-    log.info('[matchmaker] Initializing socket server');
+    log.info('[socket] Initializing socket server');
 
     const {
       port,
@@ -53,12 +53,25 @@ class VsSocket {
    * Initialize app and routes
    */
   initApp() {
-    log.info('[matchmaker] Initializing express app');
+    log.info('[socket] Initializing express app');
+
+    const server = this;
 
     const app = express();
 
-    app.get('/healthz', function(req, res) {
-      res.sendStatus(200);
+    app.get('/healthz', async function(req, res) {
+      try {
+        // check if redis is still responding
+        await Promise.all([
+          server.store.ping(),
+          server.pub.ping(),
+          server.sub.ping()
+        ]);
+
+        res.sendStatus(200);
+      } catch (err) {
+        res.sendStatus(500);
+      }
     });
 
     this.app = app;
@@ -68,7 +81,7 @@ class VsSocket {
    * Initialize http server and websocket server
    */
   initServer() {
-    log.log('[matchmaker] Initializing express server');
+    log.log('[socket] Initializing express server');
 
     const server = http.createServer(this.app);
 
@@ -82,20 +95,70 @@ class VsSocket {
   }
 
   /**
+   * Strategy for reattempting to connect to redis
+   *
+   * @param {Integer} times - The current attempt number
+   */
+  redisRetryStrategy(times) {
+    const delay = Math.min(times * 50, 2000);
+    return delay;
+  }
+
+  /**
+   * Strategy for reconnecting to redis after an error
+   *
+   * @param {Error} err - The error thrown by redis
+   */
+  redisReconnectStrategy(err) {
+    const targetError = 'READONLY';
+
+    if (err.message.slice(0, targetError.length) === targetError) {
+      // When a slave is promoted, we might get temporary errors when
+      // attempting to write against a read only slave. Attempt to
+      // reconnect if this happens
+      log.info('[socket] Redis returned a READONLY error, reconnecting');
+
+      // return 2 to reconnect and resend the failed command
+      return 2;
+    }
+  }
+
+  /**
    * Initialize store connection
    *
    * @param {Object} config - Store config
    */
   initStore(config) {
-    log.info('[matchmaker] Initializing redis store');
+    log.info('[socket] Initializing redis store');
 
-    const options = {};
+    const options = {
+      lazyConnect: true,
+      autoResendUnfulfilledCommands: false,
+      autoResubscribe: true,
+      retryStrategy: this.redisRetryStrategy,
+      reconnectOnError: this.redisReconnectStrategy
+    };
 
     if (config.password) {
       options.password = config.password;
     }
 
     this.store = new Redis(config.url, options);
+
+    function onReady() {
+      log.info('[socket] Redis store ready to receive commands');
+    }
+
+    function onError() {
+      log.info('[socket] Error connecting to redis store, retrying');
+    }
+
+    this.store.on('ready', onReady);
+    this.store.on('error', onError);
+
+    this.store.connect().catch(function() {
+      log.info('[socket] Initial redis store connection attempt failed');
+    });
   }
 
   /**
@@ -104,9 +167,15 @@ class VsSocket {
    * @param {Object} config - Pubsub config
    */
   initPubsub(config) {
-    log.info('[matchmaker] Initializing redis pubsub');
+    log.info('[socket] Initializing redis pubsub');
 
-    const options = {};
+    const options = {
+      lazyConnect: true,
+      autoResendUnfulfilledCommands: false,
+      autoResubscribe: true,
+      retryStrategy: this.redisRetryStrategy,
+      reconnectOnError: this.redisReconnectStrategy
+    };
 
     if (config.password) {
       options.password = config.password;
@@ -121,13 +190,13 @@ class VsSocket {
       this.sub.subscribe(channels[i]);
     }
 
-    this.sub.on('message', function(channel, message) {
-      log.info('[matchmaker] Received pubsub message: ' + message);
+    function onMessage(channel, message) {
+      log.info('[socket] Received pubsub message: ' + message);
 
       const m = this.parseMessage(message);
 
       if (m && m.data && m.recipient) {
-        log.info('[matchmaker] Publishing message');
+        log.info('[socket] Publishing message');
 
         if (Array.isArray(m.recipient)) {
           this.relayMulti(m.data, m.recipient);
@@ -135,6 +204,28 @@ class VsSocket {
           this.relaySingle(m.data, m.recipient);
         }
       }
+    }
+
+    function onReady() {
+      log.info('[socket] Redis pubsub ready to receive commands');
+    }
+
+    function onError() {
+      log.info('[socket] Error connecting to redis pubsub, retrying');
+    }
+
+    this.sub.on('message', onMessage);
+    this.sub.on('ready', onReady);
+    this.sub.on('error', onError);
+    this.pub.on('ready', onReady);
+    this.pub.on('error', onError);
+
+    this.sub.connect().catch(function() {
+      log.info('[socket] Initial redis subscribe connection attempt failed');
+    });
+
+    this.pub.connect().catch(function() {
+      log.info('[socket] Initial redis publish connection attempt failed');
     });
   }
 
@@ -143,12 +234,12 @@ class VsSocket {
    * Start heartbeat interval
    */
   start() {
-    log.info('[matchmaker] Starting socket server');
+    log.info('[socket] Starting socket server');
 
     const server = this;
 
     this.server.listen(this.port, function() {
-      log.info('[matchmaker] Socket server started on port ' + server.port);
+      log.info('[socket] Socket server started on port ' + server.port);
 
       setInterval(server.ping.bind(server), server.pingInterval);
     });
@@ -159,7 +250,7 @@ class VsSocket {
    * Close redis connections
    */
   stop() {
-    log.info('[matchmaker] Stopping socket server');
+    log.info('[socket] Stopping socket server');
 
     const actions = [];
 
@@ -240,7 +331,7 @@ class VsSocket {
       server.handlers.connected(socket);
     }
 
-    log.info('[matchmaker] New socket connection with id: ' + user.id);
+    log.info('[socket] New socket connection with id: ' + user.id);
   }
 
   /**
@@ -257,7 +348,7 @@ class VsSocket {
       server.handlers.disconnected(socket);
     }
 
-    log.info('[matchmaker] Socket disconnected: ' + socket.id);
+    log.info('[socket] Socket disconnected: ' + socket.id);
   }
 
   /**
@@ -281,7 +372,7 @@ class VsSocket {
       const socket = server.wss.clients[i];
 
       if (socket.isAlive === false) {
-        log.info('[matchmaker] Cleaning up dead socket: ' + socket.id);
+        log.info('[socket] Cleaning up dead socket: ' + socket.id);
 
         delete server.users[socket.id];
         return socket.terminate();
@@ -299,7 +390,7 @@ class VsSocket {
    * @param {Object} socket - Socket object
    */
   onMessageReceived(message, socket) {
-    log.info('[matchmaker] Received socket data: ' + message);
+    log.info('[socket] Received socket data: ' + message);
 
     const m = this.parseMessage(message);
 
@@ -326,7 +417,7 @@ class VsSocket {
         recipient: m.recipient
       };
     } catch (err) {
-      log.error('[matchmaker] Unable to parse message: ' + err.message);
+      log.error('[socket] Unable to parse message: ' + err.message);
     }
   }
 
@@ -364,7 +455,7 @@ class VsSocket {
     const socket = this.users[id];
 
     if (socket) {
-      log.info('[matchmaker] Recipient socket found, sending message');
+      log.info('[socket] Recipient socket found, sending message');
 
       this.sendMessage(data, socket);
     }
@@ -381,7 +472,7 @@ class VsSocket {
       const socket = this.users[ids[i]];
 
       if (socket) {
-        log.info('[matchmaker] Recipient socket found, sending message');
+        log.info('[socket] Recipient socket found, sending message');
 
         this.sendMessage(data, socket);
       }
@@ -395,7 +486,7 @@ class VsSocket {
    * @param {String} script - Lua script text
    */
   defineCommand(name, script) {
-    log.info('[matchmaker] Defining custom redis command: ' + name);
+    log.info('[socket] Defining custom redis command: ' + name);
 
     this.store.defineCommand(name, {
       lua: script,

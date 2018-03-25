@@ -254,10 +254,13 @@ class MatchmakingServer {
   start(cb) {
     log.info('[matchmaker] Starting server');
 
-    this.server.start();
-
-    if (cb) {
+    try {
+      this.server.start();
       cb();
+    } catch (err) {
+      log.error('[matchmaker] Error starting server: ' + err.message);
+
+      cb(err);
     }
   }
 
