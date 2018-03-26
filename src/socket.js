@@ -62,15 +62,20 @@ class VsSocket {
     app.get('/healthz', async function(req, res) {
       try {
         // check if redis is still responding
-        await Promise.all([
-          server.store.ping(),
-          server.pub.ping(),
-          server.sub.ping()
-        ]);
+        const actions = [
+          server.sub.ping(),
+          server.pub.ping()
+        ];
+
+        if (server.store) {
+          actions.push(server.store.ping());
+        }
+
+        await Promise.all(actions);
 
         res.sendStatus(200);
       } catch (err) {
-        res.sendStatus(500);
+        res.sendStatus(400);
       }
     });
 
@@ -232,8 +237,10 @@ class VsSocket {
   /**
    * Start server
    * Start heartbeat interval
+   *
+   * @param {Function} cb - Callback function
    */
-  start() {
+  start(cb) {
     log.info('[socket] Starting socket server');
 
     const server = this;
@@ -242,6 +249,10 @@ class VsSocket {
       log.info('[socket] Socket server started on port ' + server.port);
 
       setInterval(server.ping.bind(server), server.pingInterval);
+
+      if (cb) {
+        cb();
+      }
     });
   }
 

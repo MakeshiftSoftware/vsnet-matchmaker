@@ -7,41 +7,41 @@ spec:
   template:
     metadata:
       labels:
-        role: vsnet-matchmaker-server
+        role: vsnet-matchmaker
     spec:
       nodeSelector:
         role: apps
       containers:
       - name: vsnet-matchmaker
-        image: docker.io/makeshiftsoftware/vsnet-matchmaker-dev
-        imagePullPolicy: Always
+        image: makeshiftsoftware/vsnet-matchmaker:0.1
+        imagePullPolicy: Never
         ports:
-        - containerPort: 8080
+        - containerPort: 3000
         readinessProbe:
-          failureThreshold: 3
           httpGet:
             path: /healthz
-            port: 8080
+            port: 3000
             scheme: HTTP
+          failureThreshold: 3
           initialDelaySeconds: 5
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 3
         livenessProbe:
-          failureThreshold: 3
           httpGet:
             path: /healthz
-            port: 8080
+            port: 3000
             scheme: HTTP
+          failureThreshold: 3
           initialDelaySeconds: 5
           periodSeconds: 5
           successThreshold: 1
           timeoutSeconds: 3
         env:
           - name: PORT
-            value: "8080"
+            value: "3000"
           - name: REDIS_STORE_SERVICE
-            value: matchmaker-redis-store-service:6379
+            value: matchmaker-redis-store:6379
           - name: REDIS_PUBSUB_SERVICE
             value: matchmaker-redis-pubsub:6379
           - name: APP_SECRET

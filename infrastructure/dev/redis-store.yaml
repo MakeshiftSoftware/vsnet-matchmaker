@@ -4,7 +4,7 @@ kind: Service
 metadata:
   name: matchmaker-redis-store
   labels:
-    service: matchmaker-redis-store
+    role: matchmaker-redis-store
 spec:
   ports:
   - port: 6379
@@ -31,16 +31,3 @@ spec:
         image: redis:3
         ports:
         - containerPort: 6379
-        volumeMounts:
-        - name: data
-          mountPath: /data
-  volumeClaimTemplates:
-  - metadata:
-      name: data
-      annotations:
-        volume.alpha.kubernetes.io/storage-class: anything
-    spec:
-      accessModes: [ "ReadWriteOnce" ]
-      resources:
-        requests:
-          storage: 1Gi

@@ -247,7 +247,7 @@ class MatchmakingServer {
   }
 
   /**
-   * Stop server and cleanup
+   * Start server
    *
    * @param {Function} cb - callback function
    */
@@ -255,8 +255,9 @@ class MatchmakingServer {
     log.info('[matchmaker] Starting server');
 
     try {
-      this.server.start();
-      cb();
+      this.server.start(() => {
+        cb();
+      });
     } catch (err) {
       log.error('[matchmaker] Error starting server: ' + err.message);
 
